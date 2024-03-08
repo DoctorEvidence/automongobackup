@@ -1,0 +1,92 @@
+#+title: automongobackup
+
+A simple bash script to backup Mongo databases.
+
+
+Source code is published at [[https://github.com/DoctorEvidence/automongobackup][github.com/DoctorEvidence/automongobackup]] .
+
+Image is published at [[https://hub.docker.com/r/doctorevidence/automongobackup][doctorevidence/automongobackup]] .
+
+** Features
+
+- Backup a full cluster
+- Specify retention time in days
+- Choose a specific day per month to keep forever
+
+
+** Usage
+
+*** As a standalone script
+
+#+BEGIN_SRC shell
+
+# Download the script
+curl https://raw.githubusercontent.com/DoctorEvidence/automongobackup/main/automongobackup.sh --output automongobackup.sh && \
+chmod +x automongobackup.sh
+
+# Use a connection uri for mongo
+export MONGO_URL='mongodb://user@password@localhost:27017/?tls=true&authSource=admin'
+
+# Test connection using mongosh
+mongosh $MONGO_URL
+
+# Choose the day of month to keep backups forever
+export BACKUP_DAY_TO_KEEP="03"
+# Choose backup path
+export DB_BACKUP_PATH="dbackup"
+
+# Run the backup
+./automongobackup.sh
+
+#+END_SRC
+
+
+*** As a docker container
+
+You can run periodic mongodb backups with [[https://crazymax.dev/swarm-cronjob/][swarm-cronjob]]
+
+#+BEGIN_SRC yaml
+
+services:
+
+  mongo-backup:
+    image: docker.io/mongo-backup:latest
+    environment:
+      MONGO_URL: "mongodb://user@password@my-mongodb:27017/?tls=true&authSource=admin"
+      DB_BACKUP_PATH: /backups
+    deploy:
+      mode: replicated
+      replicas: 0
+      labels:
+        - "swarm.cronjob.enable=true"
+        - "swarm.cronjob.schedule=0 7 * * *"
+        - "swarm.cronjob.skip-running=false"
+      restart_policy:
+        # https://github.com/crazy-max/swarm-cronjob/issues/44
+        condition: on-failure
+        max_attempts: 3
+     volumes:
+       /path/to/backup:/backups
+
+#+END_SRC
+
+
+** How to build and release
+
+You will need to have docker-engine installed or podman.
+
+
+#+BEGIN_SRC
+docker login docker.io -u doctorevidence
+
+# Build image for arm64 and amd64
+docker buildx build --no-cache \
+--platform linux/arm64 \
+--platform linux/amd64 \
+-t docker.io/doctorevidence/automongobackup:6 . \
+--push
+
+# push image to docker registry
+docker push docker.io/doctorevidence/automongobackup:6
+
+#+END_SRC
